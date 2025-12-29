@@ -1,0 +1,9 @@
+# No external dependencies required
+# This project uses only Python standard library:
+# - tkinter (GUI)
+# - typing (type hints)
+# - collections (deque)
+# - time (timing)
+# - random (puzzle generation)
+# - copy (deep copying)
+
