@@ -41,7 +41,8 @@ class AlgorithmMetrics:
 class ConstraintPropagationSolver:
     """
     Constraint Propagation Algorithm
-    Progressively reduces domains through logical elimination
+    Progressively reduces domains through logical elimination.
+    Now includes backtracking to handle hard puzzles.
     """
     
     def __init__(self):
@@ -50,7 +51,7 @@ class ConstraintPropagationSolver:
     
     def solve(self, board: SudokuBoard) -> Tuple[Optional[SudokuBoard], AlgorithmMetrics]:
         """
-        Solve Sudoku using constraint propagation
+        Solve Sudoku using constraint propagation with backtracking
         
         Returns:
             Tuple of (solved_board, metrics)
@@ -58,82 +59,135 @@ class ConstraintPropagationSolver:
         self.metrics.reset()
         self.metrics.start()
         
-        # Initialize domains
-        self.domains = {}
+        result = self._solve_recursive(board)
+        
+        self.metrics.stop()
+        
+        if result:
+            return result, self.metrics
+        else:
+            return None, self.metrics  # Failed
+    
+    def _solve_recursive(self, board: SudokuBoard) -> Optional[SudokuBoard]:
+        """Recursive solver with constraint propagation"""
+        self.metrics.nodes_visited += 1
+        
+        # 1. Propagate Constraints
+        # Initialize domains for this state
+        temp_domains = {}
         for row in range(board.size):
             for col in range(board.size):
                 if board[row, col] == 0:
-                    self.domains[(row, col)] = board.get_domain(row, col)
+                    temp_domains[(row, col)] = board.get_domain(row, col)
+                    # Check for immediate conflict (empty domain for empty cell)
+                    if not temp_domains[(row, col)]:
+                        return None
                 else:
-                    self.domains[(row, col)] = {board[row, col]}
+                    temp_domains[(row, col)] = {board[row, col]}
         
-        # Apply constraint propagation
+        # Apply propagation
         changed = True
         while changed:
             changed = False
-            self.metrics.nodes_visited += 1
             
             # Find cells with single value and propagate
-            for (row, col), domain in list(self.domains.items()):
+            # Use list(items) because we might modify domains (though here we modify board)
+            for (row, col), domain in list(temp_domains.items()):
                 if len(domain) == 1 and board[row, col] == 0:
                     value = next(iter(domain))
+                    if not board.is_valid_move(row, col, value):
+                         return None # Conflict detected
+                         
                     board[row, col] = value
                     changed = True
                     self.metrics.domain_reductions += 1
                     
-                    # Remove value from related cells
-                    self._remove_from_neighbors(board, row, col, value)
+                    # Update neighbors locally in temp_domains to reflect this assignment
+                    if not self._update_domains(board, temp_domains, row, col, value):
+                        return None # Conflict during propagation
         
-        self.metrics.stop()
-        
-        # If not solved, return current state
+        # 2. Check if solved
         if board.is_solved():
-            return board, self.metrics
-        else:
-            return board, self.metrics
-    
-    def _remove_from_neighbors(self, board: SudokuBoard, row: int, col: int, value: int):
-        """Remove value from domains of related cells"""
-        # Remove from row
-        for c in range(board.size):
-            if c != col and (row, c) in self.domains:
-                if value in self.domains[(row, c)]:
-                    self.domains[(row, c)].discard(value)
-                    self.metrics.domain_reductions += 1
+            return board
         
-        # Remove from column
+        # 3. Guess (Backtracking)
+        # Select unassigned variable (MRV)
+        empty_cells = []
         for r in range(board.size):
-            if r != row and (r, col) in self.domains:
-                if value in self.domains[(r, col)]:
-                    self.domains[(r, col)].discard(value)
-                    self.metrics.domain_reductions += 1
+            for c in range(board.size):
+                if board[r, c] == 0:
+                    empty_cells.append((r, c))
         
-        # Remove from box
+        if not empty_cells:
+            return None # Should have been caught by is_solved or conflict
+            
+        # Sort by domain size (MRV)
+        empty_cells.sort(key=lambda cell: len(temp_domains.get(cell, set())))
+        
+        row, col = empty_cells[0]
+        domain = temp_domains.get((row, col), set())
+        
+        for value in domain:
+            # We don't need is_valid_move here strictly if propagation was correct, 
+            # but it is safer to check.
+            if board.is_valid_move(row, col, value):
+                new_board = board.copy()
+                new_board[row, col] = value
+                
+                result = self._solve_recursive(new_board)
+                if result:
+                    return result
+                
+                self.metrics.backtrack_count += 1
+                
+        return None
+
+    def _update_domains(self, board, domains, row, col, value):
+        """Remove value from related domains. Returns False if conflict."""
+        # Row
+        for c in range(board.size):
+            if c != col and (row, c) in domains and board[row, c] == 0:
+                if value in domains[(row, c)]:
+                    domains[(row, c)].discard(value)
+                    self.metrics.domain_reductions += 1
+                    if not domains[(row, c)]: return False
+        
+        # Column
+        for r in range(board.size):
+            if r != row and (r, col) in domains and board[r, col] == 0:
+                if value in domains[(r, col)]:
+                    domains[(r, col)].discard(value)
+                    self.metrics.domain_reductions += 1
+                    if not domains[(r, col)]: return False
+        
+        # Box
         box_row = (row // board.box_size) * board.box_size
         box_col = (col // board.box_size) * board.box_size
-        
         for r in range(box_row, box_row + board.box_size):
             for c in range(box_col, box_col + board.box_size):
-                if (r, c) != (row, col) and (r, c) in self.domains:
-                    if value in self.domains[(r, c)]:
-                        self.domains[(r, c)].discard(value)
+                if (r, c) != (row, col) and (r, c) in domains and board[r, c] == 0:
+                    if value in domains[(r, c)]:
+                        domains[(r, c)].discard(value)
                         self.metrics.domain_reductions += 1
+                        if not domains[(r, c)]: return False
+        return True
     
     def get_hint(self, board: SudokuBoard, row: int, col: int) -> Optional[int]:
         """Get a hint for a specific cell"""
         if board[row, col] != 0:
             return None
         
-        domain = board.get_domain(row, col)
-        if len(domain) > 0:
-            return next(iter(domain))
+        result, _ = self.solve(board.copy())
+        if result and result.is_solved():
+            return result[row, col]
         return None
 
 
 class AC3Solver:
     """
     AC-3 (Arc Consistency Algorithm 3)
-    Enforces binary consistency between related cells
+    Enforces binary consistency between related cells.
+    Now includes backtracking to handle hard puzzles (MAC).
     """
     
     def __init__(self):
@@ -142,7 +196,7 @@ class AC3Solver:
     
     def solve(self, board: SudokuBoard) -> Tuple[Optional[SudokuBoard], AlgorithmMetrics]:
         """
-        Solve Sudoku using AC-3 algorithm
+        Solve Sudoku using AC-3 algorithm with backtracking (MAC)
         
         Returns:
             Tuple of (solved_board, metrics)
@@ -150,89 +204,129 @@ class AC3Solver:
         self.metrics.reset()
         self.metrics.start()
         
-        # Initialize domains
-        self.domains = {}
-        for row in range(board.size):
-            for col in range(board.size):
-                if board[row, col] == 0:
-                    self.domains[(row, col)] = board.get_domain(row, col)
-                else:
-                    self.domains[(row, col)] = {board[row, col]}
-        
-        # Build constraint graph (arcs)
-        arcs = deque()
-        for row in range(board.size):
-            for col in range(board.size):
-                # Add arcs for row constraints
-                for c in range(board.size):
-                    if c != col:
-                        arcs.append(((row, col), (row, c)))
-                
-                # Add arcs for column constraints
-                for r in range(board.size):
-                    if r != row:
-                        arcs.append(((row, col), (r, col)))
-                
-                # Add arcs for box constraints
-                box_row = (row // board.box_size) * board.box_size
-                box_col = (col // board.box_size) * board.box_size
-                
-                for r in range(box_row, box_row + board.box_size):
-                    for c in range(box_col, box_col + board.box_size):
-                        if (r, c) != (row, col):
-                            arcs.append(((row, col), (r, c)))
-        
-        # Process arcs
-        while arcs:
-            self.metrics.nodes_visited += 1
-            (xi, xj) = arcs.popleft()
-            
-            if self._revise(xi, xj):
-                if len(self.domains[xi]) == 0:
-                    self.metrics.stop()
-                    return None, self.metrics  # Inconsistent
-                
-                # Add related arcs back to queue
-                row_i, col_i = xi
-                for row in range(board.size):
-                    for col in range(board.size):
-                        if (row, col) != xi and (row, col) != xj:
-                            # Check if related
-                            if (row == row_i or col == col_i or
-                                (row // board.box_size == row_i // board.box_size and
-                                 col // board.box_size == col_i // board.box_size)):
-                                arcs.append(((row, col), xi))
-        
-        # Assign single-value domains
-        for (row, col), domain in self.domains.items():
-            if len(domain) == 1 and board[row, col] == 0:
-                board[row, col] = next(iter(domain))
+        result = self._solve_recursive(board)
         
         self.metrics.stop()
         
-        if board.is_solved():
-            return board, self.metrics
+        if result:
+            return result, self.metrics
         else:
-            return board, self.metrics
-    
-    def _revise(self, xi: Tuple[int, int], xj: Tuple[int, int]) -> bool:
-        """
-        Revise domain of xi based on constraint with xj
-        For Sudoku: xi and xj must have different values
+            return None, self.metrics
+            
+    def _solve_recursive(self, board: SudokuBoard) -> Optional[SudokuBoard]:
+        self.metrics.nodes_visited += 1
         
-        Returns:
-            True if domain was revised
+        # Initialize domains for AC-3
+        current_domains = {}
+        for row in range(board.size):
+            for col in range(board.size):
+                if board[row, col] == 0:
+                    current_domains[(row, col)] = board.get_domain(row, col)
+                    if not current_domains[(row, col)]:
+                        return None # Conflict
+                else:
+                    current_domains[(row, col)] = {board[row, col]}
+        
+        # Run AC-3
+        if not self._ac3(board, current_domains):
+            return None # Inconsistent
+            
+        # Update board with singletons found by AC-3
+        # (This is safe because AC-3 ensures consistency)
+        for (row, col), domain in current_domains.items():
+            if len(domain) == 1 and board[row, col] == 0:
+                val = next(iter(domain))
+                board[row, col] = val
+        
+        if board.is_solved():
+            return board
+            
+        # Backtracking
+        # Select unassigned variable (MRV)
+        empty_cells = [rc for rc, val in current_domains.items() if board[rc[0], rc[1]] == 0]
+        if not empty_cells:
+            return None
+            
+        empty_cells.sort(key=lambda rc: len(current_domains[rc]))
+        
+        row, col = empty_cells[0]
+        domain = current_domains[(row, col)]
+        
+        for value in domain:
+            new_board = board.copy()
+            new_board[row, col] = value
+            
+            result = self._solve_recursive(new_board)
+            if result:
+                return result
+            
+            self.metrics.backtrack_count += 1
+            
+        return None
+
+    def _ac3(self, board, domains) -> bool:
+        """Run AC-3 algorithm. Returns False if inconsistent."""
+        queue = deque()
+        
+        # Add all binary constraints (arcs)
+        # In Sudoku, Arcs are (Cell1, Cell2) where Cell1 and Cell2 are peers (neighbors)
+        for row in range(board.size):
+            for col in range(board.size):
+                # Neighbors
+                neighbors = self._get_neighbors(board, row, col)
+                for neighbor in neighbors:
+                    queue.append(((row, col), neighbor))
+        
+        while queue:
+            (xi, xj) = queue.popleft()
+            
+            if self._revise(domains, xi, xj):
+                if len(domains[xi]) == 0:
+                    return False # Empty domain
+                
+                # Add neighbors of xi (excluding xj) to queue
+                neighbors = self._get_neighbors(board, xi[0], xi[1])
+                for xk in neighbors:
+                    if xk != xj:
+                        queue.append((xk, xi))
+        return True
+
+    def _get_neighbors(self, board, row, col):
+        neighbors = set()
+        # Row
+        for c in range(board.size):
+            if c != col: neighbors.add((row, c))
+        # Col
+        for r in range(board.size):
+            if r != row: neighbors.add((r, col))
+        # Box
+        box_row = (row // board.box_size) * board.box_size
+        box_col = (col // board.box_size) * board.box_size
+        for r in range(box_row, box_row + board.box_size):
+            for c in range(box_col, box_col + board.box_size):
+                if (r, c) != (row, col): neighbors.add((r, c))
+        return list(neighbors)
+
+    def _revise(self, domains, xi, xj) -> bool:
+        """
+        Revise domain of xi based on constraint with xj.
+        Constraint: xi != xj
         """
         revised = False
         
-        # If xj has only one possible value, remove it from xi
-        if len(self.domains[xj]) == 1:
-            value_to_remove = next(iter(self.domains[xj]))
-            if value_to_remove in self.domains[xi] and len(self.domains[xi]) > 1:
-                self.domains[xi].discard(value_to_remove)
-                revised = True
-                self.metrics.domain_reductions += 1
+        # Check if we need to remove values from domains[xi]
+        xj_domain = domains[xj]
         
+        # Optimization: If xj has multiple values, xi != xj is always satisfiable (unless domains are equal size 1.. wait)
+        # If xj has {v1, v2}, and xi has {v1}, is it consistent? Yes, xj can be v2.
+        # Generally for inequality: only if xj is FIXED (size 1), we remove that value from xi.
+        if len(xj_domain) == 1:
+            val_j = next(iter(xj_domain))
+            if val_j in domains[xi]:
+                domains[xi].remove(val_j)
+                self.metrics.domain_reductions += 1
+                revised = True
+                
         return revised
     
     def get_hint(self, board: SudokuBoard, row: int, col: int) -> Optional[int]:
@@ -240,9 +334,9 @@ class AC3Solver:
         if board[row, col] != 0:
             return None
         
-        domain = board.get_domain(row, col)
-        if len(domain) > 0:
-            return next(iter(domain))
+        result, _ = self.solve(board.copy())
+        if result and result.is_solved():
+            return result[row, col]
         return None
 
 
@@ -293,6 +387,8 @@ class BacktrackingSolver:
         
         # Try values in domain
         domain = board.get_domain(row, col)
+        
+        # Heuristic: Try to order values? No, standard backtracking just iterates.
         for value in domain:
             if board.is_valid_move(row, col, value):
                 board[row, col] = value
@@ -335,15 +431,108 @@ class BacktrackingSolver:
         if board[row, col] != 0:
             return None
         
-        domain = board.get_domain(row, col)
-        if len(domain) > 0:
-            # Try to solve and see what value works
-            test_board = board.copy()
-            for value in domain:
-                if test_board.is_valid_move(row, col, value):
-                    test_board[row, col] = value
-                    result, _ = self.solve(test_board)
-                    if result and result.is_solved():
-                        return value
+        # To get a valid hint, we just need to find ONE solution
+        result, _ = self.solve(board)
+        if result and result.is_solved():
+            return result[row, col]
         return None
 
+class IterativeBacktrackingSolver:
+    """
+    Iterative Backtracking Search using Stack
+    Avoids recursion depth limits for large puzzles
+    """
+    
+    def __init__(self):
+        self.metrics = AlgorithmMetrics()
+    
+    def solve(self, board: SudokuBoard) -> Tuple[Optional[SudokuBoard], AlgorithmMetrics]:
+        """
+        Solve Sudoku using iterative backtracking
+        """
+        self.metrics.reset()
+        self.metrics.start()
+        
+        # Initial domains calculation
+        domains = {}
+        empty_cells = []
+        for row in range(board.size):
+            for col in range(board.size):
+                if board[row, col] == 0:
+                    dom = board.get_domain(row, col)
+                    if not dom:
+                        self.metrics.stop()
+                        return None, self.metrics
+                    domains[(row, col)] = dom
+                    empty_cells.append((row, col))
+        
+        # If no empty cells, it's solvdd
+        if not empty_cells:
+            self.metrics.stop()
+            return board, self.metrics
+            
+        # Stack entries: (index_in_empty_cells, current_board, current_domains)
+        # Note: We need deep copies of domains if we modify them, 
+        # or we accept the cost of re-computing domains or using a reversible structure.
+        # For simplicity and correctness with MAC, let's use a simpler approach first:
+        # Standard backtracking usually revalidates. 
+        # But for 36x36, we need efficiency. 
+        # Let's use the explicit stack with state restoration.
+        
+        # Optimization: Sort empty cells by MRV initially once?
+        # A fully dynamic MRV is expensive in iterative without complex state.
+        # Let's try static MRV (sort once) for now, which is much better than nothing.
+        empty_cells.sort(key=lambda rc: len(domains[rc]))
+        
+        # Stack: list of (cell_index, available_values)
+        # We modify 'board' in place and backtrack by undoing changes.
+        stack = []
+        cell_idx = 0
+        
+        while 0 <= cell_idx < len(empty_cells):
+            self.metrics.nodes_visited += 1
+            row, col = empty_cells[cell_idx]
+            
+            # If we are visiting this cell for the first time (pushing)
+            if cell_idx == len(stack):
+                # Get values to try
+                # We can re-fetch domain to be safe with current board state
+                current_domain = board.get_domain(row, col)
+                # Sort values? Randomize?
+                values = list(current_domain)
+                # Optimization: Least Constraining Value?
+                # For now just standard order
+                
+                stack.append(values)
+            
+            values = stack[-1]
+            
+            if not values:
+                # Backtrack
+                stack.pop()
+                board[row, col] = 0 # Undo
+                cell_idx -= 1
+                self.metrics.backtrack_count += 1
+                continue
+            
+            # Try next value
+            value = values.pop()
+            
+            # Check validity (get_domain already checked it basically, but board changed)
+            if board.is_valid_move(row, col, value):
+                board[row, col] = value
+                cell_idx += 1
+            else:
+                # Value not valid (caused by other recent assignments?)
+                # Actually get_domain checks current board, so if we just calced it, it's valid.
+                # BUT if we are returning to this cell from a backtrack, 'values' contains old candidates.
+                # Some might have become invalid? No, because we only affect future cells.
+                # Wait, simply relying on is_valid_move is safer.
+                pass 
+                
+        self.metrics.stop()
+        
+        if cell_idx == len(empty_cells):
+            return board, self.metrics
+        else:
+            return None, self.metrics

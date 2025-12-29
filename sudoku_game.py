@@ -164,7 +164,7 @@ class SudokuGame:
         
         size_var = tk.StringVar(value="9x9")
         size_combo = ttk.Combobox(size_container, textvariable=size_var, 
-                                   values=["3x3", "9x9"], width=8, 
+                                   values=["3x3", "9x9", "16x16", "25x25", "36x36"], width=10, 
                                    state="readonly", style='Modern.TCombobox')
         size_combo.pack(side=tk.LEFT)
         size_combo.bind("<<ComboboxSelected>>", 
@@ -341,7 +341,10 @@ class SudokuGame:
     
     def _on_size_change(self, size_str: str):
         """Handle board size change"""
-        self.board_size = 3 if size_str == "3x3" else 9
+        if "x" in size_str:
+            self.board_size = int(size_str.split("x")[0])
+        else:
+            self.board_size = 9 # Fallback
         self._new_puzzle()
     
     def _create_board_ui(self):
@@ -353,14 +356,22 @@ class SudokuGame:
         
         # Create grid
         box_size = int(self.board_size ** 0.5)
-        cell_size = 50 if self.board_size == 9 else 60
-        font_size = 18 if self.board_size == 9 else 24
+        # Dynamic sizing
+        # Base size for 9x9 is around 600px total width
+        total_size = 600
+        cell_size = max(25, int(total_size / self.board_size))
+        
+        # Adjust font size based on cell size
+        if self.board_size <= 9: # Single digit
+            font_size = int(cell_size * 0.5) 
+        else: # Double digit
+            font_size = int(cell_size * 0.35)
         
         for row in range(self.board_size):
             for col in range(self.board_size):
                 # Create entry with better styling
                 entry = tk.Entry(self.board_frame, 
-                               width=2, 
+                               width=2 if self.board_size <= 9 else 3, 
                                font=("Arial", font_size, "bold"),
                                justify="center",
                                bg=self.colors['cell_bg'],
@@ -383,7 +394,7 @@ class SudokuGame:
                 
                 entry.grid(row=row, column=col, 
                           padx=padx_val, pady=pady_val, 
-                          ipadx=8, ipady=8,
+                          ipadx=2, ipady=4, # Reduced padding for flexibility
                           sticky="nsew")
                 
                 # Bind events
@@ -547,7 +558,7 @@ class SudokuGame:
             if self.board_size == 3:
                 self.current_board = self.generator.generate_mini_sudoku(self.difficulty)
             else:
-                self.current_board = self.generator.generate_standard_sudoku(self.difficulty)
+                self.current_board = self.generator.generate(self.board_size, self.difficulty)
             
             self.original_board = self.current_board.copy()
             self.start_time = time.time()
