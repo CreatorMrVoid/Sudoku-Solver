@@ -1,171 +1,166 @@
-# Intelligent Sudoku Solver and Analyzer
+# 🧩 Intelligent Sudoku Solver and Analyzer
 
-A Sudoku game enhanced with artificial intelligence techniques, featuring multiple solving algorithms and interactive gameplay.
+Yapay zeka teknikleri ile geliştirilmiş, modüler yapıya sahip Sudoku çözücü ve analizör.
 
-## Project Overview
+---
 
-This project presents a Sudoku-based game enhanced with artificial intelligence techniques. The player can attempt to solve Sudoku puzzles manually or request assistance from AI solvers. The system supports multiple difficulty levels and includes algorithm performance comparison features.
+## 📁 Proje Yapısı
 
-## Features
+```
+Sudoku-Solver/
+├── main.py                           # Ana giriş noktası
+├── README.md                         # Dokümantasyon
+└── src/                              # Kaynak kodları
+    ├── __init__.py
+    ├── core/                         # Temel bileşenler
+    │   ├── __init__.py
+    │   ├── board.py                  # SudokuBoard sınıfı
+    │   ├── generator.py              # PuzzleGenerator
+    │   └── metrics.py                # AlgorithmMetrics
+    ├── solvers/                      # Çözüm algoritmaları
+    │   ├── __init__.py
+    │   ├── base.py                   # BaseSolver, StepType, SolveStep
+    │   ├── constraint_propagation.py # Kısıt yayılımı
+    │   ├── ac3.py                    # AC-3 algoritması
+    │   ├── backtracking.py           # Backtracking (DFS)
+    │   └── iterative_backtracking.py # Stack tabanlı backtracking
+    └── ui/                           # Kullanıcı arayüzü
+        ├── __init__.py
+        └── animation.py              # Animasyon kontrolcüsü
+```
 
-### Core Functionality
-- **Interactive Sudoku Gameplay**: Manual puzzle solving with real-time validation
-- **Multiple Board Sizes**: Support for 3x3 mini-Sudoku and 9x9 standard Sudoku
-- **Difficulty Levels**: Easy, Medium, and Hard puzzles
-- **Real-time Error Highlighting**: Visual feedback for conflicting cells
+---
 
-### AI Algorithms
-The system implements three distinct solving algorithms:
+## 🚀 Kurulum ve Çalıştırma
 
-1. **Constraint Propagation**
-   - Progressively reduces domains through logical elimination
-   - Removes impossible values using Sudoku constraints
-   - Propagates information when cells become single-valued
+### Gereksinimler
+- Python 3.7+
+- tkinter (Python ile birlikte gelir)
 
-2. **AC-3 (Arc Consistency Algorithm 3)**
-   - Enforces binary consistency between related cells
-   - Represents puzzle as a CSP (Constraint Satisfaction Problem)
-   - Maintains arc consistency through domain revision
-
-3. **Brute-force Backtracking**
-   - Depth-first search with backtracking
-   - Optional MRV (Minimum Remaining Values) heuristic
-   - Systematic trial-and-error approach
-
-### Additional Features
-- **Hint System**: Get suggestions using the selected algorithm
-- **Algorithm Comparison**: Compare performance of all three algorithms
-- **Performance Metrics**: Track runtime, nodes visited, backtracks, and domain reductions
-- **Step-by-step Visualization**: See how algorithms solve puzzles
-- **Score Tracking**: Monitor time and hints used
-
-## Installation
-
-### Requirements
-- Python 3.7 or higher
-- tkinter (usually included with Python)
-
-### Setup
-1. Clone or download this repository
-2. Ensure Python 3.7+ is installed
-3. No additional packages required (uses only standard library)
-
-## Usage
-
-### Running the Game
+### Çalıştırma
 ```bash
-python sudoku_game.py
+python main.py
 ```
 
-### Game Controls
+---
 
-1. **New Puzzle**: Generate a new puzzle with selected size and difficulty
-2. **Get Hint**: Click on an empty cell and click "Get Hint" for a suggestion
-3. **Solve**: Automatically solve the puzzle using the selected algorithm
-4. **Compare Algorithms**: Run all three algorithms and compare their performance
-5. **Clear**: Reset the board to the original puzzle state
-6. **Check**: Verify if your current solution is correct
+## 🧠 Algoritmalar
 
-### Selecting Options
-- **Board Size**: Choose between 3x3 (mini) and 9x9 (standard) Sudoku
-- **Difficulty**: Select Easy, Medium, or Hard
-- **Algorithm**: Choose which AI algorithm to use for hints and solving
+### 1. Constraint Propagation (Kısıt Yayılımı)
+- Domain'leri mantıksal eleme ile daraltır
+- Tek değerli hücreleri otomatik doldurur
+- Propagation ile komşu domain'leri günceller
 
-## Project Structure
-
-```
-.
-├── sudoku_board.py      # Sudoku board class with validation
-├── algorithms.py         # Three AI solving algorithms
-├── puzzle_generator.py  # Puzzle generation logic
-├── sudoku_game.py       # Main game application with GUI
-├── requirements.txt      # Dependencies (none required)
-└── README.md           # This file
+```python
+from src.solvers import ConstraintPropagationSolver
+solver = ConstraintPropagationSolver()
+result, metrics = solver.solve(board)
 ```
 
-## Algorithm Details
+### 2. AC-3 (Arc Consistency Algorithm 3)
+- CSP (Constraint Satisfaction Problem) olarak modeller
+- İkili tutarlılık (arc consistency) sağlar
+- Domain'lerden tutarsız değerleri çıkarır
 
-### Constraint Propagation
-- Initializes domains based on puzzle constraints
-- Removes impossible values from related cells
-- Propagates single-valued cells to neighbors
-- Continues until no further reductions are possible
+```python
+from src.solvers import AC3Solver
+solver = AC3Solver()
+result, metrics = solver.solve(board)
+```
 
-### AC-3 Algorithm
-- Represents puzzle as a CSP with variables, domains, and constraints
-- Maintains a queue of arcs (binary constraints)
-- Revises domains to maintain arc consistency
-- Re-adds related arcs when domains change
+### 3. Backtracking (Geri İzleme)
+- DFS (Derinlik Öncelikli Arama) kullanır
+- MRV (Minimum Remaining Values) heuristic
+- Çıkmaz sokakta geri döner
 
-### Backtracking
-- Selects empty cells (optionally using MRV heuristic)
-- Tries values sequentially
-- Checks consistency after each assignment
-- Backtracks when contradictions arise
+```python
+from src.solvers import BacktrackingSolver
+solver = BacktrackingSolver(use_mrv=True)
+result, metrics = solver.solve(board)
+```
 
-## Performance Comparison
+### 4. Iterative Backtracking
+- Recursion yerine stack kullanır
+- Büyük bulmacalar (16x16+) için RecursionError önler
 
-The system tracks and compares:
-- **Runtime**: Time taken to solve
-- **Nodes Visited**: Number of states explored
-- **Backtrack Count**: Number of backtrack operations
-- **Domain Reductions**: Number of domain value removals
+```python
+from src.solvers import IterativeBacktrackingSolver
+solver = IterativeBacktrackingSolver()
+result, metrics = solver.solve(board)
+```
 
-### Expected Observations
-- **Easy puzzles**: All algorithms perform efficiently
-- **Hard puzzles**: Backtracking becomes slower with many backtracks
-- **AC-3 and Constraint Propagation**: Significantly reduce search space
-- **Hybrid approaches**: Show best performance
+---
 
-## Gameplay Mechanics
+## 📊 Performans Karşılaştırması
 
-### Winning Condition
-A puzzle is successfully completed when:
-- Every row contains digits 1-N exactly once
-- Every column contains digits 1-N exactly once
-- Every sub-grid contains digits 1-N exactly once
-- No constraints are violated
+| Algoritma | Easy (nodes) | Medium (nodes) | Hard (nodes) |
+|-----------|-------------|---------------|-------------|
+| Constraint Propagation | 1-5 | 5-15 | 10-50 |
+| AC-3 | 1-5 | 5-15 | 10-50 |
+| Backtracking | 30-50 | 50-100 | 50-200 |
+| Iterative Backtracking | 100-300 | 500-5000 | 100-500 |
 
-### Difficulty Scaling
-- **Level 1 (Easy)**: 50% of cells pre-filled
-- **Level 2 (Medium)**: 35% of cells pre-filled
-- **Level 3 (Hard)**: 25% of cells pre-filled
+### Metrikler
+- **Runtime**: Çözüm süresi (saniye)
+- **Nodes Visited**: Ziyaret edilen durum sayısı
+- **Backtrack Count**: Geri dönüş sayısı
+- **Domain Reductions**: Domain'den çıkarılan değer sayısı
 
-## Technical Details
+---
 
-### Classes
-- `SudokuBoard`: Handles board state, validation, and domain calculation
-- `ConstraintPropagationSolver`: Implements constraint propagation algorithm
-- `AC3Solver`: Implements AC-3 arc consistency algorithm
-- `BacktrackingSolver`: Implements backtracking search
-- `PuzzleGenerator`: Generates valid Sudoku puzzles
-- `SudokuGame`: Main game class with GUI
+## 🎮 Kullanım
 
-### Metrics Tracking
-- `AlgorithmMetrics`: Tracks runtime, nodes visited, backtracks, and domain reductions
+### Programatik Kullanım
+```python
+from src.core.board import SudokuBoard
+from src.core.generator import PuzzleGenerator
+from src.solvers import BacktrackingSolver
 
-## Future Enhancements
+# Puzzle oluştur
+gen = PuzzleGenerator()
+puzzle = gen.generate(9, "medium")
 
-Potential improvements:
-- Additional difficulty levels
-- More sophisticated heuristics
-- Step-by-step algorithm visualization
-- Puzzle import/export
-- Statistics and leaderboards
-- Multiplayer support
+# Çöz
+solver = BacktrackingSolver()
+result, metrics = solver.solve(puzzle)
 
-## Authors
+print(f"Çözüldü: {result.is_solved()}")
+print(f"Metrics: {metrics}")
+```
+
+### Adım Adım Animasyon
+```python
+solver = BacktrackingSolver()
+for step in solver.solve_with_steps(puzzle):
+    print(f"{step.step_type.value}: ({step.row+1}, {step.col+1}) = {step.value}")
+    if step.step_type.value == "solved":
+        break
+```
+
+---
+
+## 🔧 Teknik Detaylar
+
+### Board Doğrulama
+Her hamle üç kurala göre kontrol edilir:
+1. **Satır**: Aynı satırda tekrar yok
+2. **Sütun**: Aynı sütunda tekrar yok
+3. **Kutu**: Aynı 3x3 kutuda tekrar yok
+
+### Zorluk Seviyeleri
+| Seviye | Dolu Hücre Oranı |
+|--------|-----------------|
+| Easy | %50 |
+| Medium | %35 |
+| Hard | %25 |
+
+---
+
+## 👥 Yazarlar
 
 - Berfin Duru ALKAN - 202228005
 - Şahin ERŞAN - 202128002
 - Özgün SOYKÖK - 202228043
 - İsmail DOĞAN - 202128045
 
-## Course
-
-SENG 465 - Artificial Intelligence in Game Programming
-
-## License
-
-This project is created for educational purposes.
-
+**SENG 465** - Artificial Intelligence in Game Programming
