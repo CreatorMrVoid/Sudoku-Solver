@@ -158,9 +158,8 @@ Her hamle üç kurala göre kontrol edilir:
 
 ## 👥 Yazarlar
 
-- Berfin Duru ALKAN - 202228005
-- Şahin ERŞAN - 202128002
-- Özgün SOYKÖK - 202228043
-- İsmail DOĞAN - 202128045
+- Berfin Duru ALKAN 
+- Şahin ERŞAN 
+- Özgün SOYKÖK 
+- İsmail DOĞAN 
 
-**SENG 465** - Artificial Intelligence in Game Programming
